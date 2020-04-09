@@ -16,6 +16,8 @@ define context immf
     immode  = (0,0) noflow
 ;
 
+
+
 define token instr(32)
     op1         = (29,31)
     op_keep     = (28,28)
@@ -32,6 +34,10 @@ define token instr(32)
     rA          = (16,20)
     rB          = (11,15)
     imm16       = (0 ,15)
+    rS_hi       = (8, 15)
+    rSzero      = (3, 7)
+    rS          = (0, 2)
+    rSstack     = (0, 2)
     func        = (0, 10)
     func5       = (5, 10)
     imm5        = (0, 4)
@@ -43,6 +49,11 @@ attach variables [ rA rB rD ] [
     r16 r17 r18 r19 r20 r21 r22 r23 
     r24 r25 r26 r27 r28 r29 r30 r31 
 ];
+
+define register offset=0xC000 size=4 [ _ rmsr _ _ _ _ _ rfsr ];
+define register offset=0xC800 size=4 [ rslr _ rshr _ _ _ _ _ ];
+attach variables [rS] [ _ rmsr _ _ _ _ _ rfsr ];
+attach variables [rSstack] [ rslr _ rshr _ _ _ _ _ ];
 
 # Type-B
 :imm imm16 is opc=0b101100 & rD=0 & rA=0 & imm16 [ immode = 1; globalset(inst_next, immode); ] {
@@ -70,6 +81,8 @@ keep:     is op_keep=0 { cf = tcf; }
     build keep;
 }
 
+:xori rD, rA, Imm is opc=0b101010 & rD & rA & Imm { rD = rA ^ Imm; }
+:andi rD, rA, Imm is opc=0b101001 & rD & rA & Imm { rD = rA & Imm; }
 :lwi rD, rA, Imm is opc=0b111010 & rD & rA & Imm {
     tmp:4 = rA + Imm;
     rD = *[ram]:4 tmp;
@@ -100,7 +113,7 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     goto [Rel];
 }
 
-:beqi rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=0 & rA & Rel {
+:beqi rA, Rel  is opc=0b101111 & op_bdelay25=0 & op_bzero24=0 & rA & Rel {
     delayflag:1 = (rA == 0);
     if delayflag goto Rel;
 }
@@ -111,14 +124,29 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     if delayflag goto Rel;
 }
 
-:bnei rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=1 & rA & Rel {
+:bnei rA, Rel  is opc=0b101111 & op_bdelay25=0 & op_bzero24=1 & rA & Rel {
     delayflag:1 = (rA != 0);
     if delayflag goto Rel;
+}
+
+:bneid rA, Rel is opc=0b101111 & op_bdelay25=1 & op_bzero24=1 & rA & Rel {
+    delayflag:1 = (rA != 0);
+    delayslot(1);
+    if delayflag goto Rel;
+}
+
+:blti rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=2 & rA & Rel {
+    if (rA s< 0) goto Rel;
 }
 
 :bltid rA, Rel is opc=0b101111 & op_bdelay25=1 & op_bzero24=2 & rA & Rel {
     delayflag:1 = (rA s< 0);
     delayslot(1);
+    if delayflag goto Rel;
+}
+
+:blei rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=3 & rA & Rel {
+    delayflag:1 = (rA s<= 0);
     if delayflag goto Rel;
 }
 
@@ -128,10 +156,18 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     if delayflag goto Rel;
 }
 
+:bgti rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=4 & rA & Rel {
+    if (rA s> 0) goto Rel;
+}
+
 :bgtid rA, Rel is opc=0b101111 & op_bdelay25=1 & op_bzero24=4 & rA & Rel {
     delayflag:1 = (rA s> 0);
     delayslot(1);
     if delayflag goto Rel;
+}
+
+:bgei rA, Rel is opc=0b101111 & op_bdelay25=0 & op_bzero24=5 & rA & Rel {
+    if (rA s>= 0) goto Rel;
 }
 
 :bgeid rA, Rel is opc=0b101111 & op_bdelay25=1 & op_bzero24=5 & rA & Rel {
@@ -146,6 +182,11 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     return [tmp];
 }
 
+:bra rD, rB is opc=0b100110 & rD & op_bdelay=0 & op_babs=1 & op_blink=0 & op_bzero=0 & rB & func=0 {
+    tmp:4 = *[register]:4 rB;
+    call [tmp];
+}
+
 :brald rD, rB is opc=0b100110 & rD & op_bdelay=1 & op_babs=1 & op_blink=1 & op_bzero=0 & rB & func=0 {
     rD = inst_start;
     tmp:4 = *[register]:4 rB;
@@ -158,9 +199,23 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     rD = zext(*[ram]:1 tmp);
 }
 
+:lhui rD, rA, Off is opc=0b111001 & rD & rA & Off {
+    tmp:4 = rA + Off;
+    rD = zext(*[ram]:2 tmp);
+}
+
 :sbi rD, rA, Off is opc=0b111100 & rD & rA & Off {
     tmp:4 = rA + Off;
     *[ram]:1 tmp = rD:1;
+}
+
+:shi rD, rA, Off is opc=0b111101 & rD & rA & Off {
+    tmp:4 = rA + Off;
+    *[ram]:2 tmp = rD:2;
+}
+
+:mts rSstack, rA is opc=0b100101 & rD=0 & rA & rS_hi=0b11001000 & rSzero=0b00000 & rSstack {
+    rSstack = rA;
 }
 
 # Type-A
@@ -175,14 +230,12 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     build keep;
 }
 
-:or rD, rA, rB is opc=0b100000 & rD & rA & rB {
-    rD = rA | rB;
-}
-
-:xor rD, rA, rB is opc=0b100010 & rD & rA & rB {
-    rD = rA ^ rB;
-}
-
+:or  rD, rA, rB is opc=0b100000 & rD & rA & rB { rD = rA | rB; }
+:and rD, rA, rB is opc=0b100001 & rD & rA & rB { rD = rA & rB; }
+:xor rD, rA, rB is opc=0b100010 & rD & rA & rB { rD = rA ^ rB; }
+:bsrl rD, rA, rB is opc=0b010001 & rD & rA & rB & func=0b00000000000 { rD = rA >> rB; }
+:bsll rD, rA, rB is opc=0b010001 & rD & rA & rB & func=0b10000000000 { rD = rA << rB; }
+:bsra rD, rA, rB is opc=0b010001 & rD & rA & rB & func=0b01000000000 { rD = rA s>> rB; }
 :cmpu rD, rA, rB is opc=0b000101 & rD & rA & rB & func=0b11 {
     rD[0,31] = rB - rA;
     rD[31,1] = rA > rB;
@@ -202,4 +255,14 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
 }
 :sra rD, rA is opc=0b100100 & rD & rA & imm16=1 {
     rD = rA s>> 1;
+}
+
+:sw rD, rA, rB is opc=0b110110 & rD & rA & rB & func=0 {
+    tmp:4 = rA + rB;
+    *:4 tmp = rD;
+}
+
+:lw rD, rA, rB is opc=0b110010 & rD & rA & rB & func=0 {
+    tmp:4 = rA + rB;
+    rD = *:4 tmp;
 }

@@ -186,7 +186,7 @@
 <operand_sym_head name="rA" id="0x7d" scope="0x1b"/>
 <operand_sym_head name="Rel" id="0x7e" scope="0x1b"/>
 <operand_sym_head name="rA" id="0x7f" scope="0x1c"/>
-<operand_sym_head name="Rel" id="0x80" scope="0x1c"/>
+<operand_sym_head name="Off" id="0x80" scope="0x1c"/>
 <operand_sym_head name="rD" id="0x81" scope="0x1d"/>
 <operand_sym_head name="rB" id="0x82" scope="0x1d"/>
 <operand_sym_head name="rD" id="0x83" scope="0x1e"/>
@@ -2446,7 +2446,7 @@
 <operand_sym name="rA" id="0x7f" scope="0x1c" subsym="0x33" off="0" base="-1" minlen="4" index="0">
 <operand_exp index="0" table="0x0" ct="0x15"/>
 </operand_sym>
-<operand_sym name="Rel" id="0x80" scope="0x1c" subsym="0x58" off="0" base="-1" minlen="4" index="1">
+<operand_sym name="Off" id="0x80" scope="0x1c" subsym="0x5d" off="0" base="-1" minlen="4" index="1">
 <operand_exp index="1" table="0x0" ct="0x15"/>
 </operand_sym>
 <operand_sym name="rD" id="0x81" scope="0x1d" subsym="0x2e" off="0" base="-1" minlen="4" index="0">

@@ -176,8 +176,8 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     if delayflag goto Rel;
 }
 
-:rtsd rA, Rel is opc=0b101101 & rD=0b10000 & rA & Rel {
-    tmp = rA + Rel;
+:rtsd rA, Off is opc=0b101101 & rD=0b10000 & rA & Off {
+    tmp = rA + Off;
     delayslot(1);
     return [tmp];
 }

@@ -8,6 +8,7 @@ define register offset=0 size=4 [
     r8  r9  r10 r11 r12 r13 r14 r15
     r16 r17 r18 r19 r20 r21 r22 r23 
     r24 r25 r26 r27 r28 r29 r30 r31
+    pc
 ];
 
 define register offset=128 size=1 [ cf tcf ];
@@ -34,6 +35,8 @@ define token instr(32)
     rA          = (16,20)
     rB          = (11,15)
     imm16       = (0 ,15)
+    bit16       = (15,15)
+    imm15       = (0, 14)
     rS_hi       = (8, 15)
     rSzero      = (3, 7)
     rS          = (0, 2)
@@ -71,19 +74,23 @@ Imm:   val is imm16 & immode=1 [ val = (timm << 16)|imm16; ] {
     export tmp;
 }
 
+RegA:     is rA=0 { export 0:4; }
+RegA: rA  is rA   { export rA; }
+
 keep: "k" is op_keep=1 { }
 keep:     is op_keep=0 { cf = tcf; }
 
-:addi^keep rD, rA, Imm is op1=0b001 & keep & carry_en=0 & op2=0 & rD & rA & Imm {
+:addi^keep rD, RegA, Imm is op1=0b001 & keep & carry_en=0 & op2=0 & rD & RegA & Imm {
     tmp = Imm;
-    rD = rA + tmp;
-    tcf = scarry(rA,tmp);
+    rD = RegA + tmp;
+    tcf = scarry(RegA,tmp);
     build keep;
 }
 
 :xori rD, rA, Imm is opc=0b101010 & rD & rA & Imm { rD = rA ^ Imm; }
 :andi rD, rA, Imm is opc=0b101001 & rD & rA & Imm { rD = rA & Imm; }
-:lwi rD, rA, Imm is opc=0b111010 & rD & rA & Imm {
+:ori  rD, rA, Imm is opc=0b101000 & rD & rA & Imm { rD = rA | Imm; }
+:lwi  rD, rA, Imm is opc=0b111010 & rD & rA & Imm {
     tmp:4 = rA + Imm;
     rD = *[ram]:4 tmp;
 }
@@ -183,15 +190,15 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
 }
 
 :bra rD, rB is opc=0b100110 & rD & op_bdelay=0 & op_babs=1 & op_blink=0 & op_bzero=0 & rB & func=0 {
-    tmp:4 = *[register]:4 rB;
-    call [tmp];
+    tmp:4 = rB;
+    goto [tmp];
 }
 
 :brald rD, rB is opc=0b100110 & rD & op_bdelay=1 & op_babs=1 & op_blink=1 & op_bzero=0 & rB & func=0 {
     rD = inst_start;
-    tmp:4 = *[register]:4 rB;
+    tmp:4 = rB;
     delayslot(1);
-    call [tmp];
+    goto [tmp];
 }
 
 :lbui rD, rA, Off is opc=0b111000 & rD & rA & Off {
@@ -265,4 +272,8 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
 :lw rD, rA, rB is opc=0b110010 & rD & rA & rB & func=0 {
     tmp:4 = rA + rB;
     rD = *:4 tmp;
+}
+
+:msrclr rD, imm15 is opc=0b100101 & rD & rA=1 & bit16=0 & imm15 {
+    
 }

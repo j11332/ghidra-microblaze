@@ -4,8 +4,8 @@
   <global>
     <range space="ram"/>
   </global>
-  <stackpointer register="r1" space="ram"/>
-  <returnaddress><register name="r15"/></returnaddress>
+  <stackpointer register="sp" space="ram"/>
+  <returnaddress><register name="lr"/></returnaddress>
   <default_proto>
     <prototype extrapop="0" stackshift="0" name="__stdcall" strategy="register">
       <input>

@@ -95,16 +95,32 @@ Rel: reloc is imm16 & immode=0 [ reloc = (inst_start + imm16)&0x0000FFFF; ]	{ ex
 Rel: reloc is imm16 & immode=1 [ reloc = ((inst_start + imm16)&0x0000FFFF)|timm; ]	{ export *:4 reloc; }
 
 Off: imm16 is imm16 & immode=0 { export  imm16; }
-Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4 reloc; }
+Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export reloc; }
 
-:lwi  rD, RegA, Off is opc=0b111010 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    rD = *[ram]:4 tmp;
+ARegOff: RegA, Imm is RegA & Imm {tmp:4 = RegA + Imm; export tmp; }
+
+:lwi  rD, ARegOff is opc=0b111010 & rD & ARegOff {
+    rD = *:4 ARegOff;
 }
 
-:swi *(RegA + Off) " <= " rD is opc=0b111110 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    *[ram]:4 tmp = *[ram]:4 rD;
+:lbui rD, ARegOff is opc=0b111000 & rD & ARegOff {
+    rD = zext(*[ram]:1 ARegOff);
+}
+
+:lhui rD, ARegOff is opc=0b111001 & rD & ARegOff {
+    rD = zext(*[ram]:2 ARegOff);
+}
+
+:swi rD, ARegOff is opc=0b111110 & rD & ARegOff {
+    *:4 ARegOff = rD:4;
+}
+
+:shi rD, ARegOff is opc=0b111101 & rD & ARegOff {
+    *:2 ARegOff = rD:2;
+}
+
+:sbi rD, ARegOff is opc=0b111100 & rD & ARegOff {
+    *ARegOff = rD:1;
 }
 
 :bri Rel is opc=0b101110 & rD & op_babs=0 & op_blink=0 & op_bdelay=0 & op_bzero=0 & Rel {
@@ -188,15 +204,23 @@ Off: reloc is imm16 & immode=1 [ reloc = (imm16&0x0000FFFF)|timm; ]	{ export *:4
     if delayflag goto Rel;
 }
 
-ARegOff: rA, Off is rA & Off { 
-    ea = rA + Off; export ea;
-}
-
 :rtsd ARegOff is opc=0b101101 & rD=0b10000 & ARegOff {
     delayslot(1);
     return [ARegOff];
 }
+:rtid ARegOff is opc=0b101101 & rD=0b10001 & ARegOff {
+    delayslot(1);
+    return [ARegOff];
+}
+:rted ARegOff is opc=0b101101 & rD=0b10100 & ARegOff {
+    delayslot(1);
+    return [ARegOff];
+}
 
+:sext16 rD, RegA is opc=0b100100 & rD & RegA & imm16=0b0000000001100001 {
+    tmp:2 = RegA[0,16];
+    rD = sext(tmp);
+}
 :bra rD, rB is opc=0b100110 & rD & op_bdelay=0 & op_babs=1 & op_blink=0 & op_bzero=0 & rB & func=0 {
     tmp:4 = rB;
     goto [tmp];
@@ -209,30 +233,15 @@ ARegOff: rA, Off is rA & Off {
     call [tmp];
 }
 
-:lbui rD, RegA, Off is opc=0b111000 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    rD = zext(*[ram]:1 tmp);
-}
-
-:lhui rD, RegA, Off is opc=0b111001 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    rD = zext(*[ram]:2 tmp);
-}
-
-:sbi rD, RegA, Off is opc=0b111100 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    *[ram]:1 tmp = rD:1;
-}
-
-:shi rD, RegA, Off is opc=0b111101 & rD & RegA & Off {
-    tmp:4 = RegA + Off;
-    *[ram]:2 tmp = rD:2;
-}
-
 :mts rSstack, RegA is opc=0b100101 & rD=0 & RegA & rS_hi=0b11001000 & rSzero=0b00000 & rSstack {
     rSstack = RegA;
 }
-
+:mts rS, RegA is opc=0b100101 & rD=0 & RegA & rS_hi=0b11000000 & rSzero=0b00000 & rS {
+    rS = RegA;
+}
+:mfs rD, rS is opc=0b100101 & rD & rA=0 & rS_hi=0b10000000 & rSzero=0b00000 & rS {
+    rD = rS;
+}
 # Type-A
 :add^keep rD, RegA, RegB is op1=0b000 & keep & carry_en=0 & op2=0 & rD & RegA & RegB & func=0 {
     rD = RegB + RegA;
